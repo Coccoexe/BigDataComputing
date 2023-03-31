@@ -1,0 +1,10 @@
+Dataset = facebook_small.txt
+Number of Edges = 88234
+Number of Colors = 4
+Number of Repetitions = 5
+Approximation through node coloring
+- Number of triangles (median over 5 runs) = 1588032
+- Running time (average over 5 runs) = 423 ms
+Approximation through Spark partitions
+- Number of triangles = 1543040
+- Running time = 188 ms
