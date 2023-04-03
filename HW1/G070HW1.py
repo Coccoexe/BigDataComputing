@@ -4,6 +4,7 @@
 import pyspark
 from pyspark import SparkContext, SparkConf
 import random, sys, os, statistics, time
+from CountTriangles import CountTriangles
 
 global timer
 timer = []
@@ -20,23 +21,14 @@ def stopwatch(func):
 # Algorithm 1
 @stopwatch
 def MR_ApproxTCwithNodeColors(RDD: pyspark.RDD, C: int):
-    # parameters
     p = 8191
     a = random.randint(1, p - 1)
     b = random.randint(0, p - 1)
-    h = lambda u: ((a * u + b) % p) % C
+    h = lambda u: ((a * u + b) % p) % C                                         # hash function
+    E = [RDD.filter(lambda x: h(x[0]) == i and h(x[1]) == i) for i in range(C)] # create C subsets E(i) of edges
+    t = [CountTriangles(E[i].collect()) for i in range(C)]                      # count the number of triangles in each subset using CountTriangles
+    return C**2 * sum(t)                                                        # return the final estimate
     
-    # create C subsets of edges, where each i-th subset E(i) contains all edges (u,v) such that h(u) = h(v) = i, and if the 2 endpoints of an edge belong to different subsets, then the edge is discarded.
-    E = [RDD.filter(lambda x: h(int(x[0])) == i and h(int(x[1])) == i).map(lambda x: (x[0], x[1])).cache() for i in range(C)]
-
-    # compute the number t(i) of triangles in each subset E(i)
-    t = [E[i].join(E[i]).map(lambda x: (x[1][0], x[1][1])).join(E[i]).map(lambda x: (x[0], x[1][0], x[1][1])).count() for i in range(C)]
-
-    # compute the total number of triangles
-    tfinal = sum(t)
-
-    return tfinal
-
 # Algorithm 2
 def MR_ApproxTCwithSparkPartitions():
     return
@@ -70,8 +62,7 @@ def main():
     
     # read input file and subdivide it into C random partitions
     # parse input with format: "node1,node2"
-    docs = sc.textFile(file).map(lambda x: x.split(",")).map(lambda x: (x[0], x[1])).repartition(numPartitions=C).cache()
-    docs.repartition(numPartitions=C)
+    docs = sc.textFile(file).map(lambda x: x.split(",")).map(lambda x: (int(x[0]), int(x[1]))).repartition(C).cache()
     
     print("Dataset = " + file)
     print("Number of Edges = " + str(docs.count()))
