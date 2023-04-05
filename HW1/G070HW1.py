@@ -4,7 +4,31 @@
 import pyspark
 from pyspark import SparkContext, SparkConf
 import random, sys, os, statistics, time
-from CountTriangles import CountTriangles
+from collections import defaultdict
+
+def CountTriangles(edges):
+    # Create a defaultdict to store the neighbors of each vertex
+    neighbors = defaultdict(set)
+    for edge in edges:
+        u, v = edge
+        neighbors[u].add(v)
+        neighbors[v].add(u)
+
+    # Initialize the triangle count to zero
+    triangle_count = 0
+
+    # Iterate over each vertex in the graph.
+    # To avoid duplicates, we count a triangle <u, v, w> only if u<v<w
+    for u in neighbors:
+        # Iterate over each pair of neighbors of u
+        for v in neighbors[u]:
+            if v > u:
+                for w in neighbors[v]:
+                    # If w is also a neighbor of u, then we have a triangle
+                    if w > v and w in neighbors[u]:
+                        triangle_count += 1
+    # Return the total number of triangles in the graph
+    return triangle_count
 
 global timer
 timer = []
@@ -18,6 +42,16 @@ def stopwatch(func):
         return result
     return wrapper
 
+# Algorithm 1 old version
+@stopwatch
+def MR_ApproxTCwithNodeColors_old(RDD: pyspark.RDD, C: int):
+    p = 8191
+    a = random.randint(1, p - 1)
+    b = random.randint(0, p - 1)
+    h = lambda u: ((a * u + b) % p) % C    
+    t = [CountTriangles(RDD.filter(lambda x: h(x[0]) == i and h(x[1]) == i).collect()) for i in range(C)]    
+    return C**2 * sum(t)
+    
 # Algorithm 1
 @stopwatch
 def MR_ApproxTCwithNodeColors(RDD: pyspark.RDD, C: int):
@@ -25,15 +59,32 @@ def MR_ApproxTCwithNodeColors(RDD: pyspark.RDD, C: int):
     a = random.randint(1, p - 1)
     b = random.randint(0, p - 1)
     h = lambda u: ((a * u + b) % p) % C
-    t = [CountTriangles(RDD.filter(lambda x: h(x[0]) == i and h(x[1]) == i).collect()) for i in range(C)]
-    return C**2 * sum(t)
-    
+    # compute the number of triangles in each partition using map and reduce
+    t = (RDD.map(lambda x: (h(x[0]), x) if h(x[0]) == h(x[1]) else (-1, x)).filter(lambda x: x[0] != -1)
+            .groupByKey()
+            .map(lambda x: (x[0], CountTriangles(list(x[1]))))
+            .map(lambda x: (0, x[1]))
+            .reduceByKey(lambda x, y: x + y).values())
+
+    # compute the final estimate
+    return C**2 * sum(t.collect())
+
 # Algorithm 2
 @stopwatch
 def MR_ApproxTCwithSparkPartitions(RDD: pyspark.RDD, C: int):
-    #generate C random partitions
-    partitions = RDD.randomSplit([1/C]*C)
-    t = [CountTriangles(partitions[i].collect()) for i in range(C)]
+    # Write the method/function MR_ApproxTCwithSparkPartitions which implements ALGORITHM 2. 
+    # Specifically,MR_ApproxTCwithSparkPartitions must take as input an RDD of edges and the number of partitions C, 
+    # and must return an estimate of thenumber of triangles formed by the input edges computed through transformations of the input RDD, 
+    # as specified by the algorithm. 
+    # In particular,the input RDD must be subdivided into C partitions and each partition, 
+    # accessed through one of the mapPartitions methods offered by Spark, willrepresent one of the subsets appearing in the high-level description above. 
+    # If the RDD is passed to the method already subdivided into Cpartitions, it is not necessary to re-partition it.
+    
+    # split the RDD into C partitions
+    part = RDD.repartition(C)
+    
+    # compute the number of triangles in each partition
+    t = part.mapPartitions(lambda x: [CountTriangles(list(x))]).collect()
     
     return C**2 * sum(t)                                                        # return the final estimate
 
@@ -78,11 +129,11 @@ def main():
     
     print("Approximation through node coloring")
     print("- Number of triangles (median over ", R , " runs) = ", statistics.median(tfinal)) 
-    print("- Running time (average over ", R , " runs) = ", round(statistics.mean(timer)*1000), " ms")
+    print("- Running time (average over ", R , " runs) = ", round(statistics.mean(timer)/C*1000), " ms")
     timer.clear()
     print("Approximation through Spark partitions")
     print("- Number of triangles = ", MR_ApproxTCwithSparkPartitions(docs, C))
-    print("- Running time = ", round(timer[0]*1000), " ms")
+    print("- Running time = ", round(timer[0]/C*1000), " ms")
 
 # main function
 if __name__ == "__main__":
