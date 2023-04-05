@@ -51,45 +51,48 @@ def MR_ApproxTCwithNodeColors_old(RDD: pyspark.RDD, C: int):
     h = lambda u: ((a * u + b) % p) % C    
     t = [CountTriangles(RDD.filter(lambda x: h(x[0]) == i and h(x[1]) == i).collect()) for i in range(C)]    
     return C**2 * sum(t)
-    
-# Algorithm 1
+
+#################### ALGORITHM 1 ####################
 @stopwatch
 def MR_ApproxTCwithNodeColors(RDD: pyspark.RDD, C: int):
+    """ Compute an estimate of the number of triangles in the graph represented by the input RDD.
+
+    Args:
+        RDD (pyspark.RDD): Graph represented by an RDD of edges
+        C (int): Number of colors
+
+    Returns:
+        int: An estimate of the number of triangles in the graph
+    """
+
     p = 8191
     a = random.randint(1, p - 1)
     b = random.randint(0, p - 1)
-    h = lambda u: ((a * u + b) % p) % C
-    # compute the number of triangles in each partition using map and reduce
-    t = (RDD.map(lambda x: (h(x[0]), x) if h(x[0]) == h(x[1]) else (-1, x)).filter(lambda x: x[0] != -1)
-            .groupByKey()
-            .map(lambda x: (x[0], CountTriangles(list(x[1]))))
-            .map(lambda x: (0, x[1]))
-            .reduceByKey(lambda x, y: x + y).values())
+    h = lambda u: ((a * u + b) % p) % C                                                                               # hash function
+    t = (RDD.map(lambda x: (h(x[0]), x) if h(x[0]) == h(x[1]) else None).filter(lambda x: x is not None).groupByKey() # ROUND 1.1: (color, (u, v)) if u and v have the same color, else None --> (color, [(u, v), (u, v), ...]])
+            .map(lambda x: (x[0], CountTriangles(list(x[1])))).values().collect())                                    # ROUND 1.2: (color, number of triangles in the partition) --> [t1, t2, ...]
+    return C**2 * sum(t)                                                                                              # ROUND 2: return an estimate of the number of triangles in the graph
 
-    # compute the final estimate
-    return C**2 * sum(t.collect())
-
-# Algorithm 2
+#################### ALGORITHM 2 ####################
 @stopwatch
 def MR_ApproxTCwithSparkPartitions(RDD: pyspark.RDD, C: int):
-    # Write the method/function MR_ApproxTCwithSparkPartitions which implements ALGORITHM 2. 
-    # Specifically,MR_ApproxTCwithSparkPartitions must take as input an RDD of edges and the number of partitions C, 
-    # and must return an estimate of thenumber of triangles formed by the input edges computed through transformations of the input RDD, 
-    # as specified by the algorithm. 
-    # In particular,the input RDD must be subdivided into C partitions and each partition, 
-    # accessed through one of the mapPartitions methods offered by Spark, willrepresent one of the subsets appearing in the high-level description above. 
-    # If the RDD is passed to the method already subdivided into Cpartitions, it is not necessary to re-partition it.
+    """ Compute an estimate of the number of triangles in the graph represented by the input RDD.
     
-    # split the RDD into C partitions
-    part = RDD.repartition(C)
+    Args:
+        RDD (pyspark.RDD): Graph represented by an RDD of edges
+        C (int): Number of colors
+        
+    Returns:
+        int: An estimate of the number of triangles in the graph
+    """
     
-    # compute the number of triangles in each partition
-    t = part.mapPartitions(lambda x: [CountTriangles(list(x))]).collect()
-    
-    return C**2 * sum(t)                                                        # return the final estimate
+    # TODO: improve this shit
+    t = (RDD.repartition(C)                                          # ROUND 1.1: subdivide the input RDD into C random partitions
+            .mapPartitions(lambda x: [CountTriangles(x)]).collect()) # ROUND 1.2: count the number of triangles in each partition --> [t1, t2, ...]
+    return C**2 * sum(t)                                             # ROUND 2: return an estimate of the number of triangles in the graph
 
+#####################################################
 def main():
-    # check arguments
     if len(sys.argv) != 4:
         print("Usage: python G070HW1.py <int C> <int R> <path of file>")
         exit(-1)
