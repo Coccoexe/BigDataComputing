@@ -24,14 +24,18 @@ def MR_ApproxTCwithNodeColors(RDD: pyspark.RDD, C: int):
     p = 8191
     a = random.randint(1, p - 1)
     b = random.randint(0, p - 1)
-    h = lambda u: ((a * u + b) % p) % C                                         # hash function
-    E = [RDD.filter(lambda x: h(x[0]) == i and h(x[1]) == i) for i in range(C)] # create C subsets E(i) of edges
-    t = [CountTriangles(E[i].collect()) for i in range(C)]                      # count the number of triangles in each subset using CountTriangles
-    return C**2 * sum(t)                                                        # return the final estimate
+    h = lambda u: ((a * u + b) % p) % C
+    t = [CountTriangles(RDD.filter(lambda x: h(x[0]) == i and h(x[1]) == i).collect()) for i in range(C)]
+    return C**2 * sum(t)
     
 # Algorithm 2
-def MR_ApproxTCwithSparkPartitions():
-    return
+@stopwatch
+def MR_ApproxTCwithSparkPartitions(RDD: pyspark.RDD, C: int):
+    #generate C random partitions
+    partitions = RDD.randomSplit([1/C]*C)
+    t = [CountTriangles(partitions[i].collect()) for i in range(C)]
+    
+    return C**2 * sum(t)                                                        # return the final estimate
 
 def main():
     # check arguments
@@ -62,7 +66,7 @@ def main():
     
     # read input file and subdivide it into C random partitions
     # parse input with format: "node1,node2"
-    docs = sc.textFile(file).map(lambda x: x.split(",")).map(lambda x: (int(x[0]), int(x[1]))).repartition(C).cache()
+    docs = sc.textFile(file).map(lambda x: x.split(",")).map(lambda x: (int(x[0]), int(x[1]))).cache()
     
     print("Dataset = " + file)
     print("Number of Edges = " + str(docs.count()))
@@ -76,6 +80,9 @@ def main():
     print("- Number of triangles (median over ", R , " runs) = ", statistics.median(tfinal)) 
     print("- Running time (average over ", R , " runs) = ", round(statistics.mean(timer)*1000), " ms")
     timer.clear()
+    print("Approximation through Spark partitions")
+    print("- Number of triangles = ", MR_ApproxTCwithSparkPartitions(docs, C))
+    print("- Running time = ", round(timer[0]*1000), " ms")
 
 # main function
 if __name__ == "__main__":
