@@ -3,8 +3,38 @@
 
 import pyspark
 from pyspark import SparkContext, SparkConf
-import random, sys, os, statistics, time
+import random, os, statistics, time, argparse
 from collections import defaultdict
+
+global timer # global list to store the running time of each function
+timer = []   # initialize the list
+
+def stopwatch(func):
+    """ Decorator function to measure the running time of a function. Appends the running time to the global list 'timer'.
+    
+    Args:
+        func (function): Function to be measured
+    
+    Returns:
+        function: Decorated function
+
+    Usage:
+        >>> @stopwatch
+        >>> def foo():
+        >>>     pass
+
+        >>> foo()
+        >>> print(round(statistics.mean(timer) * 1000), " ms")
+        451 ms
+    """
+
+    def wrapper(*args, **kwargs):
+        start = time.time()
+        result = func(*args, **kwargs)
+        end = time.time()
+        timer.append(end - start)
+        return result
+    return wrapper
 
 def CountTriangles(edges):
     # Create a defaultdict to store the neighbors of each vertex
@@ -30,32 +60,9 @@ def CountTriangles(edges):
     # Return the total number of triangles in the graph
     return triangle_count
 
-global timer
-timer = []
-
-def stopwatch(func):
-    def wrapper(*args, **kwargs):
-        start = time.time()
-        result = func(*args, **kwargs)
-        end = time.time()
-        timer.append(end - start)
-        return result
-    return wrapper
-
-# Algorithm 1 old version
-@stopwatch
-def MR_ApproxTCwithNodeColors_old(RDD: pyspark.RDD, C: int):
-    p = 8191
-    a = random.randint(1, p - 1)
-    b = random.randint(0, p - 1)
-    h = lambda u: ((a * u + b) % p) % C    
-    t = [CountTriangles(RDD.filter(lambda x: h(x[0]) == i and h(x[1]) == i).collect()) for i in range(C)]    
-    return C**2 * sum(t)
-
-#################### ALGORITHM 1 ####################
 @stopwatch
 def MR_ApproxTCwithNodeColors(RDD: pyspark.RDD, C: int):
-    """ Compute an estimate of the number of triangles in the graph represented by the input RDD.
+    """ ALGORITHM 1: Compute an estimate of the number of triangles in the graph represented by the input RDD, using node coloring.
 
     Args:
         RDD (pyspark.RDD): Graph represented by an RDD of edges
@@ -73,10 +80,9 @@ def MR_ApproxTCwithNodeColors(RDD: pyspark.RDD, C: int):
             .map(lambda x: (x[0], CountTriangles(list(x[1])))).values().collect())                                    # ROUND 1.2: (color, number of triangles in the partition) --> [t1, t2, ...]
     return C**2 * sum(t)                                                                                              # ROUND 2: return an estimate of the number of triangles in the graph
 
-#################### ALGORITHM 2 ####################
 @stopwatch
 def MR_ApproxTCwithSparkPartitions(RDD: pyspark.RDD, C: int):
-    """ Compute an estimate of the number of triangles in the graph represented by the input RDD.
+    """ ALGORITHM 2: Compute an estimate of the number of triangles in the graph represented by the input RDD, using Spark partitions.
     
     Args:
         RDD (pyspark.RDD): Graph represented by an RDD of edges
@@ -91,54 +97,52 @@ def MR_ApproxTCwithSparkPartitions(RDD: pyspark.RDD, C: int):
             .mapPartitions(lambda x: [CountTriangles(x)]).collect()) # ROUND 1.2: count the number of triangles in each partition --> [t1, t2, ...]
     return C**2 * sum(t)                                             # ROUND 2: return an estimate of the number of triangles in the graph
 
-#####################################################
 def main():
-    if len(sys.argv) != 4:
-        print("Usage: python G070HW1.py <int C> <int R> <path of file>")
-        exit(-1)
-    if not sys.argv[1].isdigit():
-        print("C must be an integer")
-        exit(-1)
-    if not sys.argv[2].isdigit():
-        print("R must be an integer")
-        exit(-1)
-    if not os.path.exists(sys.argv[3]):
-        print("File does not exist")
-        exit(-1)
-    if not sys.argv[3].endswith(".txt"):
-        print("File must be a text file")
-        exit(-1)      
-    
-    # parse arguments
-    C = int(sys.argv[1])
-    R = int(sys.argv[2])          
-    file = sys.argv[3]
+    # argparse
+    parser = argparse.ArgumentParser()
+    parser.add_argument('C', help = 'number of colors/partitions', type = int)
+    parser.add_argument('R', help = 'number of runs', type = int)
+    parser.add_argument('file', help = 'path to .txt graph file', type = lambda x: x if os.path.isfile(x) and x.endswith(".txt") else argparse.ArgumentTypeError())
+    args = parser.parse_args()
     
     # spark setup
     conf = SparkConf().setAppName('G070HW1')
-    sc = SparkContext(conf=conf)
+    sc = SparkContext(conf = conf)
     
-    # read input file and subdivide it into C random partitions
-    # parse input with format: "node1,node2"
-    docs = sc.textFile(file).map(lambda x: x.split(",")).map(lambda x: (int(x[0]), int(x[1]))).cache()
-    
-    print("Dataset = " + file)
+    # RDD setup
+    docs = sc.textFile(args.file).map(lambda x: x.split(",")).map(lambda x: (int(x[0]), int(x[1]))).cache()
+
+    # info
+    print("Dataset = " + args.file)
     print("Number of Edges = " + str(docs.count()))
-    print("Number of Partitions = " + str(C))
-    print("Number of Rounds = " + str(R))
+    print("Number of Partitions = " + str(args.C))
+    print("Number of Rounds = " + str(args.R))
     
-    # run algorithm 1
-    tfinal = [MR_ApproxTCwithNodeColors(docs, C) for i in range(R)]
-    
+    # ALGORITHM 1
+    t1 = [MR_ApproxTCwithNodeColors(docs, args.C) for i in range(args.R)]
     print("Approximation through node coloring")
-    print("- Number of triangles (median over ", R , " runs) = ", statistics.median(tfinal)) 
-    print("- Running time (average over ", R , " runs) = ", round(statistics.mean(timer)/C*1000), " ms")
+    print("- Number of triangles (median over ", args.R , " runs) = ", statistics.median(t1)) 
+    print("- Running time (average over ", args.R , " runs) = ", round(statistics.mean(timer) / args.C * 1000), " ms")
+
+    # reset timer
     timer.clear()
+
+    # ALGORITHM 2
+    t2 = MR_ApproxTCwithSparkPartitions(docs, args.C)
     print("Approximation through Spark partitions")
-    print("- Number of triangles = ", MR_ApproxTCwithSparkPartitions(docs, C))
-    print("- Running time = ", round(timer[0]/C*1000), " ms")
+    print("- Number of triangles = ", t2)
+    print("- Running time = ", round(timer[0] / args.C * 1000), " ms")
 
 # main function
 if __name__ == "__main__":
     main()
-     
+
+# OLD CODE
+@stopwatch
+def MR_ApproxTCwithNodeColors_old(RDD: pyspark.RDD, C: int):
+    p = 8191
+    a = random.randint(1, p - 1)
+    b = random.randint(0, p - 1)
+    h = lambda u: ((a * u + b) % p) % C
+    t = [CountTriangles(RDD.filter(lambda x: h(x[0]) == i and h(x[1]) == i).collect()) for i in range(C)]
+    return C**2 * sum(t)
