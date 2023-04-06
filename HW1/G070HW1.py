@@ -86,13 +86,12 @@ def MR_ApproxTCwithSparkPartitions(RDD: pyspark.RDD, C: int):
     
     Args:
         RDD (pyspark.RDD): Graph represented by an RDD of edges
-        C (int): Number of colors
+        C (int): Number of partitions
         
     Returns:
         int: An estimate of the number of triangles in the graph
     """
-    
-    # TODO: improve this shit
+      
     t = (RDD.repartition(C)                                          # ROUND 1.1: subdivide the input RDD into C random partitions
             .mapPartitions(lambda x: [CountTriangles(x)]).collect()) # ROUND 1.2: count the number of triangles in each partition --> [t1, t2, ...]
     return C**2 * sum(t)                                             # ROUND 2: return an estimate of the number of triangles in the graph
@@ -122,7 +121,7 @@ def main():
     t1 = [MR_ApproxTCwithNodeColors(docs, args.C) for i in range(args.R)]
     print("Approximation through node coloring")
     print("- Number of triangles (median over ", args.R , " runs) = ", statistics.median(t1)) 
-    print("- Running time (average over ", args.R , " runs) = ", round(statistics.mean(timer) / args.C * 1000), " ms")
+    print("- Running time (average over ", args.R , " runs) = ", round(statistics.mean(timer) * 1000), " ms")
 
     # reset timer
     timer.clear()
@@ -131,7 +130,7 @@ def main():
     t2 = MR_ApproxTCwithSparkPartitions(docs, args.C)
     print("Approximation through Spark partitions")
     print("- Number of triangles = ", t2)
-    print("- Running time = ", round(timer[0] / args.C * 1000), " ms")
+    print("- Running time = ", round(timer[0] * 1000), " ms")
 
 # main function
 if __name__ == "__main__":
