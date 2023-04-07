@@ -108,8 +108,9 @@ def main():
     conf = SparkConf().setAppName('G070HW1')
     sc = SparkContext(conf = conf)
     
-    # RDD setup
-    docs = sc.textFile(args.file).map(lambda x: x.split(",")).map(lambda x: (int(x[0]), int(x[1]))).cache()
+    # RDD setup and shuffling
+    docs = (sc.textFile(args.file).map(lambda x: (random.random(), list(map(int, x.split(","))))).sortByKey()
+              .map(lambda x: x[1]).cache())
 
     # info
     print("Dataset = " + args.file)
