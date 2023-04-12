@@ -108,10 +108,9 @@ def main():
     conf = SparkConf().setAppName('G070HW1')
     sc = SparkContext(conf = conf)
     
-    # RDD setup and shuffling
-    docs = (sc.textFile(args.file).map(lambda x: (random.random(), list(map(int, x.split(","))))).sortByKey()
-              .map(lambda x: x[1]).cache())
-
+    # RDD setup
+    docs = sc.textFile(args.file).map(lambda x: list(map(int, x.split(",")))).cache()
+    
     # info
     print("Dataset = " + args.file)
     print("Number of Edges = " + str(docs.count()))
@@ -136,13 +135,3 @@ def main():
 # main function
 if __name__ == "__main__":
     main()
-
-# OLD CODE
-@stopwatch
-def MR_ApproxTCwithNodeColors_old(RDD: pyspark.RDD, C: int):
-    p = 8191
-    a = random.randint(1, p - 1)
-    b = random.randint(0, p - 1)
-    h = lambda u: ((a * u + b) % p) % C
-    t = [CountTriangles(RDD.filter(lambda x: h(x[0]) == i and h(x[1]) == i).collect()) for i in range(C)]
-    return C**2 * sum(t)
