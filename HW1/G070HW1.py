@@ -91,9 +91,8 @@ def MR_ApproxTCwithSparkPartitions(RDD: pyspark.RDD, C: int):
     Returns:
         int: An estimate of the number of triangles in the graph
     """
-      
-    t = (RDD.repartition(C)                                          # ROUND 1.1: subdivide the input RDD into C random partitions
-            .mapPartitions(lambda x: [CountTriangles(x)]).collect()) # ROUND 1.2: count the number of triangles in each partition --> [t1, t2, ...]
+                                                                     # ROUND 1.1: RDD is already subdivided into C random partitions
+    t = (RDD.mapPartitions(lambda x: [CountTriangles(x)]).collect()) # ROUND 1.2: count the number of triangles in each partition --> [t1, t2, ...]
     return C**2 * sum(t)                                             # ROUND 2: return an estimate of the number of triangles in the graph
 
 def main():
@@ -109,7 +108,7 @@ def main():
     sc = SparkContext(conf = conf)
     
     # RDD setup
-    docs = sc.textFile(args.file).map(lambda x: list(map(int, x.split(",")))).cache()
+    docs = sc.textFile(args.file).map(lambda x: list(map(int, x.split(",")))).repartition(args.C).cache()
     
     # info
     print("Dataset = " + args.file)
