@@ -108,7 +108,7 @@ def main():
     sc = SparkContext(conf = conf)
     
     # RDD setup
-    docs = sc.textFile(args.file).map(lambda x: list(map(int, x.split(",")))).repartition(args.C).cache()
+    docs = sc.textFile(args.file).map(lambda x: tuple(map(int, x.split(",")))).repartition(args.C).cache().distinct()
     
     # info
     print("Dataset = " + args.file)
