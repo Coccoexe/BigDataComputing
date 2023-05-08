@@ -1,4 +1,4 @@
-# Homework 1 - Triangle Counting
+# Homework 2 - Triangle Counting
 # Group 70 - Alessio Cocco 2087635, Andrea Valentinuzzi 2090451, Giovanni Brejc 2096046
 
 import pyspark
@@ -68,7 +68,6 @@ def countTriangles2(colors_tuple, edges, rand_a, rand_b, p, num_colors):
     #Creare a dictionary for storing node colors
     node_colors = dict()
     for edge in edges:
-
         u, v = edge
         node_colors[u]= ((rand_a*u+rand_b)%p)%num_colors
         node_colors[v]= ((rand_a*v+rand_b)%p)%num_colors
@@ -114,6 +113,7 @@ def MR_ApproxTCwithNodeColors(RDD: pyspark.RDD, C: int):
             .map(lambda x: (x[0], CountTriangles(list(x[1])))).values().collect())                                    # ROUND 1.2: (color, number of triangles in the partition) --> [t1, t2, ...]
     return C**2 * sum(t)                                                                                              # ROUND 2: return an estimate of the number of triangles in the graph
 
+@stopwatch
 def MR_ExactTC(RDD: pyspark.RDD, C: int):
     """ Compute the exact number of triangles in the graph represented by the input RDD, using node coloring.
 
@@ -124,14 +124,26 @@ def MR_ExactTC(RDD: pyspark.RDD, C: int):
     Returns:
         int: The exact number of triangles in the graph
     """
+
     p = 8191
     a = random.randint(1, p - 1)
     b = random.randint(0, p - 1)
     h = lambda u: ((a * u + b) % p) % C
-    # add index to each edge
-    RDD = RDD.zipWithIndex().map(lambda x: (x[0][0], x[0][1], x[1]))
-    # for each edge (u, v) map to (k, (u, v)), where k is triplet (h(u), h(v), i) and i is the index of the edge in the partition and the triplet is sorted in increasing order
-    t = RDD.map(lambda x: (tuple(sorted((h(x[0]), h(x[1]), i))), x)).groupByKey().values().map(lambda x: CountTriangles(list(x))).sum()
+    t = (RDD.map(lambda x: (sorted(tuple(h(x[0]), h(x[1]))), x)).groupByKey().zipWithIndex().map(lambda x: (sorted(tuple(x[0][0] + x[1])), x[0][1]))
+            .map(lambda x: (x[0], CountTriangles(list(x[1])))).values().collect())
+    #t = (RDD.zipWithIndex().map(lambda x: (tuple(sorted((h(x[0][0]), h(x[0][1]), x[1]))), (x[0])))
+    #        .groupByKey().map(lambda x: (x[0], countTriangles2(x[0], list(x[1]), a, b, p, C))).values().collect())
+    return sum(t)
+    # (k1, (u,v))
+    # (k2, (u,v))
+    # (k2, (u,v))
+    # (k3, (u,v))
+    # (k4, (u,v))
+    # (k5, (u,v))
+    # (k5, (u,v))
+    # (k6, (u,v))
+    #
+
 
 def main():
     # argparse
@@ -164,10 +176,10 @@ def main():
     timer.clear()
 
     # ALGORITHM 2
-    #t2 = MR_ApproxTCwithSparkPartitions(docs, args.C)
-    #print("Approximation through Spark partitions")
-    #print("- Number of triangles = ", t2)
-    #print("- Running time = ", round(timer[0] * 1000), " ms")
+    t2 = MR_ExactTC(docs, args.C)
+    print("Exact computation through node coloring")
+    print("- Number of triangles = ", t2)
+    print("- Running time = ", round(timer[0] * 1000), " ms")
 
 # main function
 if __name__ == "__main__":
