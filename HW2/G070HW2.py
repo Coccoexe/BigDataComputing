@@ -128,22 +128,18 @@ def MR_ExactTC(RDD: pyspark.RDD, C: int):
     p = 8191
     a = random.randint(1, p - 1)
     b = random.randint(0, p - 1)
-    h = lambda u: ((a * u + b) % p) % C
-    # for each edge (u, v) create a separate C key-value pairs (k, (u, v)) where each i-th k is a triplet (h(u), h(v), i) sorted by non-decreasing order
-    # then group by key and count the number of triangles for each key
-    # finally sum the number of triangles for each key
-
-    # ROUND 1.1: (color, (u, v)) if u and v have the same color, else None --> (color, [(u, v), (u, v), ...])
-    # ROUND 1.2: (color, number of triangles in the partition) --> [t1, t2, ...]
-    # ROUND 2: return the exact number of triangles in the graph
-
-    #t = (RDD.map(lambda x: (None, ([i for i in range(C)]))
+    h = lambda u: ((a * u + b) % p) % C                                                         # hash function
+    t = (RDD.flatMap(lambda x: ([(tuple(sorted((h(x[0]), h(x[1]), i))), x) for i in range(C)])) # ROUND 1.1: (k_i, (u, v)) for each color i in range(C) --> [(k_0, (u, v)), (k_1, (u, v)), ...], for each edge (u, v)
+            .groupByKey().map(lambda x: (x[0], countTriangles2(x[0], list(x[1]), a, b, p, C)))  # ROUND 1.2: (k_i, number of triangles in the partition) for each color i in range(C) --> [(k_0, t_0), (k_1, t_1), ...]
+            .values().sum())                                                                    # ROUND 2: sum the number of triangles in each partition
+    return t
 
 def main():
     # argparse
     parser = argparse.ArgumentParser()
     parser.add_argument('C', help = 'number of colors/partitions', type = int)
     parser.add_argument('R', help = 'number of runs', type = int)
+    parser.add_argument('F', help = 'algorithm to run (0,1)', type = int, choices = [0,1])
     parser.add_argument('file', help = 'path to .txt graph file', type = lambda x: x if os.path.isfile(x) and x.endswith(".txt") else argparse.ArgumentTypeError())
     args = parser.parse_args()
     
@@ -159,21 +155,21 @@ def main():
     print("Number of Edges = " + str(docs.count()))
     print("Number of Partitions = " + str(args.C))
     print("Number of Rounds = " + str(args.R))
-    
-    # ALGORITHM 1
-    t1 = [MR_ApproxTCwithNodeColors(docs, args.C) for i in range(args.R)]
-    print("Approximation through node coloring")
-    print("- Number of triangles (median over ", args.R , " runs) = ", statistics.median(t1)) 
-    print("- Running time (average over ", args.R , " runs) = ", round(statistics.mean(timer) * 1000), " ms")
+    print("Algorithm to run =", "MR_ExactTC" if args.F else "MR_ApproxTCwithNodeColors")
+ 
+    if not args.F:
+        # ALGORITHM 1
+        t1 = [MR_ApproxTCwithNodeColors(docs, args.C) for i in range(args.R)]
+        print("Approximation through node coloring")
+        print("- Number of triangles (median over ", args.R , " runs) = ", statistics.median(t1)) 
+        print("- Running time (average over ", args.R , " runs) = ", round(statistics.mean(timer) * 1000), " ms")
 
-    # reset timer
-    timer.clear()
-
-    # ALGORITHM 2
-    t2 = MR_ExactTC(docs, args.C)
-    print("Exact computation through node coloring")
-    print("- Number of triangles = ", t2)
-    print("- Running time = ", round(timer[0] * 1000), " ms")
+    else:
+        # ALGORITHM 2
+        t2 = [MR_ExactTC(docs, args.C) for i in range(args.R)]
+        print("Exact computation through node coloring")
+        print("- Number of triangles = ", t2[-1])
+        print("- Running time (average over ", args.R , " runs) = ", round(statistics.mean(timer) * 1000), " ms")
 
 # main function
 if __name__ == "__main__":
