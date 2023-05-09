@@ -1,0 +1,22 @@
+OUTPUT with parameters: 16 executors, 8 colors, 3 repetitions, flag 0, file  /data/BDC2223/orkut4M.txt
+
+Dataset = /data/BDC2223/orkut4M.txt
+Number of Edges = 4000000
+Number of Colors = 8
+Number of Repetitions = 3
+Approximation algorithm with node coloring
+- Number of triangles (median over 3 runs) = 11778112
+- Running time (average over 3 runs) = 1853 ms
+
+
+
+
+OUTPUT with parameters:  with 16 executors, 8 colors, 3 repetitions, flag 1, file  /data/BDC2223/orkut4M.txt
+
+Dataset = /data/BDC2223/orkut4M.txt
+Number of Edges = 4000000
+Number of Colors = 8
+Number of Repetitions = 3
+Exact algorithm with node coloring
+- Number of triangles = 12184731
+- Running time (average over 3 runs) = 23607 ms
