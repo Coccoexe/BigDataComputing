@@ -129,21 +129,15 @@ def MR_ExactTC(RDD: pyspark.RDD, C: int):
     a = random.randint(1, p - 1)
     b = random.randint(0, p - 1)
     h = lambda u: ((a * u + b) % p) % C
-    t = (RDD.map(lambda x: (sorted(tuple(h(x[0]), h(x[1]))), x)).groupByKey().zipWithIndex().map(lambda x: (sorted(tuple(x[0][0] + x[1])), x[0][1]))
-            .map(lambda x: (x[0], CountTriangles(list(x[1])))).values().collect())
-    #t = (RDD.zipWithIndex().map(lambda x: (tuple(sorted((h(x[0][0]), h(x[0][1]), x[1]))), (x[0])))
-    #        .groupByKey().map(lambda x: (x[0], countTriangles2(x[0], list(x[1]), a, b, p, C))).values().collect())
-    return sum(t)
-    # (k1, (u,v))
-    # (k2, (u,v))
-    # (k2, (u,v))
-    # (k3, (u,v))
-    # (k4, (u,v))
-    # (k5, (u,v))
-    # (k5, (u,v))
-    # (k6, (u,v))
-    #
+    # for each edge (u, v) create a separate C key-value pairs (k, (u, v)) where each i-th k is a triplet (h(u), h(v), i) sorted by non-decreasing order
+    # then group by key and count the number of triangles for each key
+    # finally sum the number of triangles for each key
 
+    # ROUND 1.1: (color, (u, v)) if u and v have the same color, else None --> (color, [(u, v), (u, v), ...])
+    # ROUND 1.2: (color, number of triangles in the partition) --> [t1, t2, ...]
+    # ROUND 2: return the exact number of triangles in the graph
+
+    t = (RDD.map(lambda x: []
 
 def main():
     # argparse
