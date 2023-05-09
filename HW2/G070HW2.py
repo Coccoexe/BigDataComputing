@@ -137,7 +137,7 @@ def MR_ExactTC(RDD: pyspark.RDD, C: int):
     # ROUND 1.2: (color, number of triangles in the partition) --> [t1, t2, ...]
     # ROUND 2: return the exact number of triangles in the graph
 
-    t = (RDD.map(lambda x: []
+    #t = (RDD.map(lambda x: (None, ([i for i in range(C)]))
 
 def main():
     # argparse
