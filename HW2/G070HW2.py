@@ -137,39 +137,39 @@ def MR_ExactTC(RDD: pyspark.RDD, C: int):
 def main():
     # argparse
     parser = argparse.ArgumentParser()
-    parser.add_argument('C', help = 'number of colors/partitions', type = int)
+    parser.add_argument('C', help = 'number of colors', type = int)
     parser.add_argument('R', help = 'number of runs', type = int)
     parser.add_argument('F', help = 'algorithm to run (0,1)', type = int, choices = [0,1])
-    parser.add_argument('file', help = 'path to .txt graph file', type = lambda x: x if os.path.isfile(x) and x.endswith(".txt") else argparse.ArgumentTypeError())
+    parser.add_argument('file', help = 'path to .txt graph file', type = str) # lambda x: x if os.path.isfile(x) and x.endswith(".txt") else argparse.ArgumentTypeError())
     args = parser.parse_args()
     
     # spark setup
     conf = SparkConf().setAppName('G070HW1')
+    conf.set("spark.locality.wait", "0s")
     sc = SparkContext(conf = conf)
     
     # RDD setup
-    docs = sc.textFile(args.file).map(lambda x: tuple(map(int, x.split(",")))).repartition(args.C).cache().distinct()
+    docs = sc.textFile(args.file).map(lambda x: tuple(map(int, x.split(",")))).repartition(32).cache().distinct()
     
     # info
     print("Dataset = " + args.file)
     print("Number of Edges = " + str(docs.count()))
-    print("Number of Partitions = " + str(args.C))
-    print("Number of Rounds = " + str(args.R))
-    print("Algorithm to run =", "MR_ExactTC" if args.F else "MR_ApproxTCwithNodeColors")
+    print("Number of Colors = " + str(args.C))
+    print("Number of Repetitions = " + str(args.R))
  
     if not args.F:
         # ALGORITHM 1
         t1 = [MR_ApproxTCwithNodeColors(docs, args.C) for i in range(args.R)]
         print("Approximation through node coloring")
-        print("- Number of triangles (median over ", args.R , " runs) = ", statistics.median(t1)) 
-        print("- Running time (average over ", args.R , " runs) = ", round(statistics.mean(timer) * 1000), " ms")
+        print("- Number of triangles (median over", args.R , "runs) =", statistics.median(t1)) 
+        print("- Running time (average over", args.R , "runs) =", round(statistics.mean(timer) * 1000), "ms")
 
     else:
         # ALGORITHM 2
         t2 = [MR_ExactTC(docs, args.C) for i in range(args.R)]
         print("Exact computation through node coloring")
-        print("- Number of triangles = ", t2[-1])
-        print("- Running time (average over ", args.R , " runs) = ", round(statistics.mean(timer) * 1000), " ms")
+        print("- Number of triangles =", t2[-1])
+        print("- Running time (average over", args.R , "runs) =", round(statistics.mean(timer) * 1000), "ms")
 
 # main function
 if __name__ == "__main__":

@@ -1,0 +1,7 @@
+Dataset = /data/BDC2223/orkut1M.txt
+Number of Edges = 1000000
+Number of Colors = 8
+Number of Repetitions = 3
+Approximation through node coloring
+- Number of triangles (median over 3 runs) = 3120384
+- Running time (average over 3 runs) = 1170 ms
