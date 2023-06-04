@@ -12,6 +12,7 @@ timer = []   # initialize the list
 THRESHOLD = 10000000
 streamLength = [0] # Stream length (an array to be passed by reference)
 
+
 def stopwatch(func):
     """ Decorator function to measure the running time of a function. Appends the running time to the global list 'timer'.
     
@@ -40,74 +41,37 @@ def stopwatch(func):
     return wrapper
 
 def process_batch(batch, args, stopping_condition):
-    batch_size = batch.count()
-    streamLength[0] += batch_size
+    """ Process a batch of data. If the stream length is greater than the threshold, set the stopping condition to True.
 
-    # threshold
+    Args:
+        batch (RDD): Batch of data
+        args (argparse.Namespace): Arguments
+        stopping_condition (threading.Event): Stopping condition
+
+    Returns:
+        None
+
+    Usage:
+        >>> process_batch(batch, args, stopping_condition)
+    """
+    
+    batch_size = batch.count()
+    if not batch_size:
+        return
+    streamLength[0] += batch_size
     if streamLength[0] >= THRESHOLD:
         stopping_condition.set()
         return
-
-    # [left, right]
     if streamLength[0] <= args.left and streamLength[0] >= args.right:
         return
-    
-    
 
-    # empty args.D x args.W matrix
-    countSketch = [[0 for _ in range(args.W)] for _ in range(args.D)]
-    for element in batch.collect():
-        element = int(element)
-        for i in range(args.D):
-                p = 8191
-                a = random.randint(1, p - 1)
-                b = random.randint(0, p - 1)
-                C = 20 # ???
-                h = lambda u: ((a * u + b) % p) % C
-                # add random +- 1
-                countSketch[i][h(element)] += (2 * random.randint(0, 1) - 1)
-
-    #FINO A QUI SEMBRA GIUSTO
-    #MEDIANA SBAGLIATA GUARDARE SLIDE (per ogni elemento...) e poi mi sembra usi le stesse hash, quindi da capire dove generare i numeri random
-
-    # compute f = (2 * random.randint(0, 1) - 1) * countSketch[i][h(element)]
-    f = []
-    for i in range(args.D):
-        p = 8191
-        a = random.randint(1, p - 1)
-        b = random.randint(0, p - 1)
-        C = 20 # ???
-        h = lambda u: ((a * u + b) % p) % C
-        f.append((2 * random.randint(0, 1) - 1) * countSketch[i][h(element)])
-
-    # compute the median of f
-    print(statistics.median(f))
-
-    # f2
-    f2 = []
-    for i in range(args.D):
-        f2.append(sum([countSketch[i][j] ** 2 for j in range(args.W)]))
-    
-    # compute the median of f2
-    print(statistics.median(f2))
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-    
+    # process batch
+    batch = batch.map(lambda s: (int(s), 1)).reduceByKey(lambda a, b: a + b).collect()
+    for element, n in batch:
+        frequencyMap[element] += n # true frequency
+        for i in range(args.D):    # count sketch
+            countSketch[i][hash_functions[i](element)] += n * (2 * random.randint(0, 1) - 1)
+    interval[0] += batch_size         # interval size
 
 # main function
 def main():
@@ -130,15 +94,26 @@ def main():
     ssc.sparkContext.setLogLevel("ERROR")
     stopping_condition = threading.Event()
 
-    # info
+    # stream
     portExp = int(args.portExp)
     print("Receiving data from port =", portExp)
-
-    
-
     stream = ssc.socketTextStream("algo.dei.unipd.it", portExp, StorageLevel.MEMORY_AND_DISK)
-    stream.foreachRDD(lambda batch: process_batch(batch, args, stopping_condition))
 
+    # global variables
+    p = 8191
+    global countSketch
+    global hash_functions
+    global interval
+    global frequencyMap
+    countSketch = [[0 for _ in range(args.W)] for _ in range(args.D)]
+    hash_functions = [lambda u: ((random.randint(1, p - 1) * u + random.randint(0, p - 1)) % p) % args.W for _ in range(args.D)]
+    interval = [0]
+    frequencyMap = defaultdict(int)
+
+    # process batch
+    stream.foreachRDD(lambda batch: process_batch(batch, args, stopping_condition))
+    
+    # info
     print("Starting streaming engine")
     ssc.start()
     print("Waiting for shutdown condition")
@@ -146,9 +121,29 @@ def main():
     print("Stopping the streaming engine")
     ssc.stop(False, True)
     print("Streaming engine stopped")
+    print("END OF STREAMING\n")
 
-    # COMPUTE AND PRINT FINAL STATISTICS
-    print("END OF STREAMING")
+    # true statistics
+    f = frequencyMap
+    f2 = sum([f[element] ** 2 for element in f]) / interval[0] ** 2
+
+    # approximate statistics
+    f_approx = [(2 * random.randint(0, 1) - 1) * sum([countSketch[i][hash_functions[i](element)] for i in range(args.D)]) for element in f]
+    f2_approx = [sum([countSketch[i][j] ** 2 for j in range(args.W)]) / interval[0] ** 2 for i in range(args.D)]
+
+    # average relative error
+    err = [f_approx[i] for i in range(len(f_approx)) if f[i] >= sorted(f.values(), reverse = True)[args.K - 1]]
+    err = sum([abs(err[i] - f[i]) / f[i] for i in range(len(err))]) / len(err)
+
+    # print
+    print("Interval size =", interval[0])
+    print("Number of distinct elements =", len(f))
+    print("Average relative error =", err)
+    if args.K <= 20:
+        f_top = sorted(f.values(), reverse = True)[:args.K]
+        f_approx_top = sorted(f_approx, reverse = True)[:args.K]
+        print("True frequencies of top-K items =", f_top)
+        print("Estimated frequencies of top-K items =", f_approx_top)
 
 if __name__ == "__main__":
     main()
