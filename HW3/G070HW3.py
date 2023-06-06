@@ -62,7 +62,8 @@ def process_batch(batch, args, stopping_condition):
     if streamLength[0] >= THRESHOLD:
         stopping_condition.set()
         return
-    if streamLength[0] <= args.left and streamLength[0] >= args.right:
+    print("Batch size at time [{0}] is: {1}".format(time.time(), batch_size))
+    if streamLength[0] <= args.left or streamLength[0] >= args.right:
         return
 
     # process batch
