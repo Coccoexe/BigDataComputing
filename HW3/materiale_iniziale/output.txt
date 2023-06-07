@@ -1,0 +1,25 @@
+****** EXAMPLE OF OUTPUT 1 ******
+D = 5 W = 30 [left,right] = [1,8000] K = 10 Port = 8888
+Total number of items = 10160395
+Total number of items in [1,8000] = 8941858
+Number of distinct items in [1,8000] = 8000
+Item 7 Freq = 5681446 Est. Freq = 5683174
+Item 8 Freq = 1151466 Est. Freq = 1151838
+Item 9 Freq = 452604 Est. Freq = 457737
+Item 10 Freq = 233557 Est. Freq = 234482
+Item 11 Freq = 139995 Est. Freq = 141719
+Item 12 Freq = 91910 Est. Freq = 91104
+Item 13 Freq = 64102 Est. Freq = 65006
+Item 14 Freq = 47290 Est. Freq = 46985
+Item 15 Freq = 36054 Est. Freq = 35403
+Item 16 Freq = 28341 Est. Freq = 28900
+Avg err for top 10 = 0.009534533162424435
+F2 0.424011122758935 F2 Estimate 0.42533809344983364
+
+****** EXAMPLE OF OUTPUT 2 ******
+D = 9 W = 60 [left,right] = [1,8000] K = 30 Port = 8888
+Total number of items = 10000818
+Total number of items in [1,8000] = 8802203
+Number of distinct items in [1,8000] = 8000
+Avg err for top 30 = 0.17075093410444334
+F2 0.4747445435089549 F2 Estimate 0.4746713945174351

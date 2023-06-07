@@ -54,7 +54,6 @@ def process_batch(batch, args, stopping_condition):
     Usage:
         >>> process_batch(batch, args, stopping_condition)
     """
-    
     batch_size = batch.count()
     if not batch_size:
         return
@@ -62,17 +61,16 @@ def process_batch(batch, args, stopping_condition):
     if streamLength[0] >= THRESHOLD:
         stopping_condition.set()
         return
-    print("Batch size at time [{0}] is: {1}".format(time.time(), batch_size))
     if streamLength[0] <= args.left or streamLength[0] >= args.right:
         return
 
     # process batch
-    batch = batch.map(lambda s: (int(s), 1)).reduceByKey(lambda a, b: a + b).collect()
+    batch = batch.map(lambda e: (int(e), 1)).reduceByKey(lambda a, b: a + b).collect()     # (element, frequency)
     for element, n in batch:
-        frequencyMap[element] += n # true frequency
-        for i in range(args.D):    # count sketch
-            countSketch[i][hash_functions[i](element)] += n * (2 * random.randint(0, 1) - 1)
-    interval[0] += batch_size         # interval size
+        frequencyMap[element] += n                                                         # true frequency
+        for j in range(args.D):                                                            # for 1 <= j <= args.D
+            countSketch[j][hash_functions[j](element)] += g_functions[j] * n               # update count sketch
+    interval[0] += batch_size                                                              # update interval size
 
 # main function
 def main():
@@ -104,10 +102,12 @@ def main():
     p = 8191
     global countSketch
     global hash_functions
+    global g_functions
     global interval
     global frequencyMap
     countSketch = [[0 for _ in range(args.W)] for _ in range(args.D)]
     hash_functions = [lambda u: ((random.randint(1, p - 1) * u + random.randint(0, p - 1)) % p) % args.W for _ in range(args.D)]
+    g_functions = [2 * random.randint(0, 1) - 1 for _ in range(args.D)]
     interval = [0]
     frequencyMap = defaultdict(int)
 
@@ -129,8 +129,8 @@ def main():
     f2 = sum([f[element] ** 2 for element in f]) / interval[0] ** 2
 
     # approximate statistics
-    f_approx = [(2 * random.randint(0, 1) - 1) * sum([countSketch[i][hash_functions[i](element)] for i in range(args.D)]) for element in f]
-    f2_approx = [sum([countSketch[i][j] ** 2 for j in range(args.W)]) / interval[0] ** 2 for i in range(args.D)]
+    f_approx = [g_functions[j] * countSketch[j][hash_functions[j](element)] for j in range(args.D) for element in f]
+    f2_approx = [sum([countSketch[j][k] ** 2 for k in range(args.W)]) / interval[0] ** 2 for j in range(args.D)]
 
     # average relative error
     err = [f_approx[i] for i in range(len(f_approx)) if f[i] >= sorted(f.values(), reverse = True)[args.K - 1]]
