@@ -61,16 +61,16 @@ def process_batch(batch, args, stopping_condition):
     if streamLength[0] >= THRESHOLD:
         stopping_condition.set()
         return
-    if streamLength[0] <= args.left or streamLength[0] >= args.right:
-        return
-
+    
     # process batch
-    batch = batch.map(lambda e: (int(e), 1)).reduceByKey(lambda a, b: a + b).collect()     # (element, frequency)
+    batch = batch.map(lambda x: (int(x), 1) if x >= args.left and x <= args.right else None) \
+            .filter(lambda x: x is not None) \
+            .reduceByKey(lambda a, b: a + b) \
+            .collect()
     for element, n in batch:
         frequencyMap[element] += n                                                         # true frequency
         for j in range(args.D):                                                            # for 1 <= j <= args.D
             countSketch[j][hash_functions[j](element)] += g_functions[j] * n               # update count sketch
-    interval[0] += batch_size                                                              # update interval size
 
 # main function
 def main():
@@ -103,12 +103,10 @@ def main():
     global countSketch
     global hash_functions
     global g_functions
-    global interval
     global frequencyMap
     countSketch = [[0 for _ in range(args.W)] for _ in range(args.D)]
     hash_functions = [lambda u: ((random.randint(1, p - 1) * u + random.randint(0, p - 1)) % p) % args.W for _ in range(args.D)]
     g_functions = [2 * random.randint(0, 1) - 1 for _ in range(args.D)]
-    interval = [0]
     frequencyMap = defaultdict(int)
 
     # process batch
@@ -125,19 +123,20 @@ def main():
     print("END OF STREAMING\n")
 
     # true statistics
+    interval = sum(f.keys())
     f = frequencyMap
-    f2 = sum([f[element] ** 2 for element in f]) / interval[0] ** 2
+    f2 = sum([f[element] ** 2 for element in f]) / interval ** 2
 
     # approximate statistics
     f_approx = [g_functions[j] * countSketch[j][hash_functions[j](element)] for j in range(args.D) for element in f]
-    f2_approx = [sum([countSketch[j][k] ** 2 for k in range(args.W)]) / interval[0] ** 2 for j in range(args.D)]
+    f2_approx = [sum([countSketch[j][k] ** 2 for k in range(args.W)]) / interval ** 2 for j in range(args.D)]
 
     # average relative error
     err = [f_approx[i] for i in range(len(f_approx)) if f[i] >= sorted(f.values(), reverse = True)[args.K - 1]]
     err = sum([abs(err[i] - f[i]) / f[i] for i in range(len(err))]) / len(err)
 
     # print
-    print("Interval size =", interval[0])
+    print("Interval size =", interval)
     print("Number of distinct elements =", len(f))
     print("Average relative error =", err)
     if args.K <= 20:
