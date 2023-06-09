@@ -40,6 +40,7 @@ def stopwatch(func):
         return result
     return wrapper
 
+
 def process_batch(batch, args, stopping_condition):
     """ Process a batch of data. If the stream length is greater than the threshold, set the stopping condition to True.
 
@@ -63,14 +64,15 @@ def process_batch(batch, args, stopping_condition):
         return
     
     # process batch
-    batch = batch.map(lambda x: (int(x), 1) if x >= args.left and x <= args.right else None) \
+    batch = batch.map(lambda x: (int(x), 1) if int(x) >= args.left and int(x) <= args.right else None) \
             .filter(lambda x: x is not None) \
             .reduceByKey(lambda a, b: a + b) \
             .collect()
     for element, n in batch:
         frequencyMap[element] += n                                                         # true frequency
         for j in range(args.D):                                                            # for 1 <= j <= args.D
-            countSketch[j][hash_functions[j](element)] += g_functions[j] * n               # update count sketch
+            #countSketch[j][hash_functions[j](element)] += g_functions[j] * n               # update count sketch
+            countSketch[j][hash_functions[j](element)] += g_functions(element,j) * n 
 
 # main function
 def main():
@@ -100,13 +102,16 @@ def main():
 
     # global variables
     p = 8191
+    a = [random.randint(1, p - 1) for _ in range(args.D)]
+    b = [random.randint(0, p - 1) for _ in range(args.D)]
     global countSketch
     global hash_functions
     global g_functions
     global frequencyMap
     countSketch = [[0 for _ in range(args.W)] for _ in range(args.D)]
-    hash_functions = [lambda u: ((random.randint(1, p - 1) * u + random.randint(0, p - 1)) % p) % args.W for _ in range(args.D)]
-    g_functions = [2 * random.randint(0, 1) - 1 for _ in range(args.D)]
+    hash_functions = [lambda u: ((a[i] * u + b[i]) % p) % args.W for i in range(args.D)]
+    g_functions = lambda u,j: (2*(hash_functions[j](u)%2)-1) * (2*(u%2)-1)
+
     frequencyMap = defaultdict(int)
 
     # process batch
@@ -123,17 +128,29 @@ def main():
     print("END OF STREAMING\n")
 
     # true statistics
-    interval = sum(f.keys())
     f = frequencyMap
+    interval = sum(f.values())
     f2 = sum([f[element] ** 2 for element in f]) / interval ** 2
 
     # approximate statistics
-    f_approx = [g_functions[j] * countSketch[j][hash_functions[j](element)] for j in range(args.D) for element in f]
+    f_approx = defaultdict(int)
+    for element in f:
+        temp = []
+        for j in range(args.D):
+            #temp.append(countSketch[j][hash_functions[j](element)] * g_functions[j])
+            temp.append(countSketch[j][hash_functions[j](element)] * g_functions(element,j))
+        f_approx[element] = statistics.median(temp)
     f2_approx = [sum([countSketch[j][k] ** 2 for k in range(args.W)]) / interval ** 2 for j in range(args.D)]
 
     # average relative error
-    err = [f_approx[i] for i in range(len(f_approx)) if f[i] >= sorted(f.values(), reverse = True)[args.K - 1]]
-    err = sum([abs(err[i] - f[i]) / f[i] for i in range(len(err))]) / len(err)
+    k_freq = defaultdict(int,sorted(f.items(), key = lambda x: x[1], reverse = True)[:args.K])
+    err = defaultdict(int)
+    for element in k_freq:
+        print(element, f[element], f_approx[element])
+        err[element] = abs(f[element] - f_approx[element]) / f[element]
+    err = sum(err.values()) / len(err)
+
+    print(k_freq)
 
     # print
     print("Interval size =", interval)
