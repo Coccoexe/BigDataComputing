@@ -110,7 +110,7 @@ def main():
     global frequencyMap
     countSketch = [[0 for _ in range(args.W)] for _ in range(args.D)]
     hash_functions = [lambda u: ((a[i] * u + b[i]) % p) % args.W for i in range(args.D)]
-    g_functions = lambda u,j: (2*(hash_functions[j](u)%2)-1) * (2*(u%2)-1)
+    g_functions = lambda u,j: ((2*(hash_functions[j](u)%2)-1) * (2*(u%2)-1))
 
     frequencyMap = defaultdict(int)
 
