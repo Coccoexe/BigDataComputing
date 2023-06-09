@@ -8,9 +8,10 @@ import random, os, statistics, time, argparse, threading
 from collections import defaultdict
 
 global timer, streamLength # global list to store the running time of each function
-timer = []   # initialize the list
+timer = []                 # initialize the list
+streamLength = [0]         # Stream length (an array to be passed by reference)
 THRESHOLD = 10000000
-streamLength = [0] # Stream length (an array to be passed by reference)
+
 
 
 def stopwatch(func):
@@ -55,6 +56,7 @@ def process_batch(batch, args, stopping_condition):
     Usage:
         >>> process_batch(batch, args, stopping_condition)
     """
+
     batch_size = batch.count()
     if not batch_size:
         return
@@ -63,7 +65,6 @@ def process_batch(batch, args, stopping_condition):
         stopping_condition.set()
         return
     
-    # process batch
     batch = batch.map(lambda x: (int(x), 1) if int(x) >= args.left and int(x) <= args.right else None) \
             .filter(lambda x: x is not None) \
             .reduceByKey(lambda a, b: a + b) \
@@ -74,7 +75,6 @@ def process_batch(batch, args, stopping_condition):
             #countSketch[j][hash_functions[j](element)] += g_functions[j] * n               # update count sketch
             countSketch[j][hash_functions[j](element)] += g_functions(element,j) * n 
 
-# main function
 def main():
     # argparse
     parser = argparse.ArgumentParser()
@@ -91,7 +91,7 @@ def main():
     conf.setMaster("local[*]")
     conf.set("spark.locality.wait", "0s")
     sc = SparkContext(conf = conf)
-    ssc = StreamingContext(sc, 1)  # Batch duration of 1 second
+    ssc = StreamingContext(sc, 1)  # Batch duration of 1s
     ssc.sparkContext.setLogLevel("ERROR")
     stopping_condition = threading.Event()
 
@@ -101,49 +101,51 @@ def main():
     stream = ssc.socketTextStream("algo.dei.unipd.it", portExp, StorageLevel.MEMORY_AND_DISK)
 
     # global variables
-    p = 8191
-    a = [random.randint(1, p - 1) for _ in range(args.D)]
-    b = [random.randint(0, p - 1) for _ in range(args.D)]
-    global countSketch
-    global hash_functions
-    global g_functions
-    global frequencyMap
+    p = 8191                                              # as defined in the assignment
+    a = [random.randint(1, p - 1) for _ in range(args.D)] # random numbers in [1, p - 1]
+    b = [random.randint(0, p - 1) for _ in range(args.D)] # random numbers in [0, p - 1]
+    global frequencyMap                                   # frequency map
+    global countSketch                                    # count sketch
+    global hash_functions                                 # hash functions
+    global g_functions                                    # g functions
+    frequencyMap = defaultdict(int)
     countSketch = [[0 for _ in range(args.W)] for _ in range(args.D)]
     hash_functions = [lambda u: ((a[i] * u + b[i]) % p) % args.W for i in range(args.D)]
-    g_functions = lambda u,j: ((2*(hash_functions[j](u)%2)-1) * (2*(u%2)-1))
-
-    frequencyMap = defaultdict(int)
+    g_functions = lambda u, j: ((2 * (hash_functions[j](u) % 2) - 1) * (2 * (u % 2) - 1))
 
     # process batch
     stream.foreachRDD(lambda batch: process_batch(batch, args, stopping_condition))
     
     # info
-    print("Starting streaming engine")
+    #print("Starting streaming engine")
     ssc.start()
-    print("Waiting for shutdown condition")
+    #print("Waiting for shutdown condition")
     stopping_condition.wait()
-    print("Stopping the streaming engine")
+    #print("Stopping the streaming engine")
     ssc.stop(False, True)
-    print("Streaming engine stopped")
-    print("END OF STREAMING\n")
+    #print("Streaming engine stopped")
+    #print("END OF STREAMING\n")
 
     # true statistics
-    f = frequencyMap
-    interval = sum(f.values())
-    f2 = sum([f[element] ** 2 for element in f]) / interval ** 2
+    f = frequencyMap                                             # true frequency
+    interval = sum(f.values())                                   # interval length
+    f2 = sum([f[element] ** 2 for element in f]) / interval ** 2 # true second moment
 
     # approximate statistics
-    f_approx = defaultdict(int)
-    for element in f:
-        temp = []
-        for j in range(args.D):
-            #temp.append(countSketch[j][hash_functions[j](element)] * g_functions[j])
-            temp.append(countSketch[j][hash_functions[j](element)] * g_functions(element,j))
-        f_approx[element] = statistics.median(temp)
-    f2_approx = [sum([countSketch[j][k] ** 2 for k in range(args.W)]) / interval ** 2 for j in range(args.D)]
+    f_approx = {element: statistics.median([countSketch[j][hash_functions[j](element)] * g_functions(element, j) for j in range(args.D)]) for element in f} # approximate frequency
+    f2_approx = [sum([countSketch[j][k] ** 2 for k in range(args.W)]) / interval ** 2 for j in range(args.D)]                                               # approximate second moment
+
+    #f_approx = defaultdict(int)
+    #for element in f:
+    #    temp = []
+    #    for j in range(args.D):
+    #        #temp.append(countSketch[j][hash_functions[j](element)] * g_functions[j])
+    #        temp.append(countSketch[j][hash_functions[j](element)] * g_functions(element,j))
+    #    f_approx[element] = statistics.median(temp)
+    #f2_approx = [sum([countSketch[j][k] ** 2 for k in range(args.W)]) / interval ** 2 for j in range(args.D)]
 
     # average relative error
-    k_freq = defaultdict(int,sorted(f.items(), key = lambda x: x[1], reverse = True)[:args.K])
+    k_freq = defaultdict(int, sorted(f.items(), key = lambda x: x[1], reverse = True)[:args.K])
     err = defaultdict(int)
     for element in k_freq:
         print(element, f[element], f_approx[element])
