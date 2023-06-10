@@ -1,0 +1,17 @@
+Receiving data from port = 8888
+D = 9 W = 100 [left,right] = [1,10000] K = 10 Port = 8888
+Total number of items = 10948896
+Total number of items in = [1,10000] = 8587488
+Number of distinct elements in [1,10000] = 10000
+Item 7 Freq = 5552450 Est. Freq = 5552276
+Item 8 Freq = 1040237 Est. Freq = 1040087
+Item 9 Freq = 388941 Est. Freq = 388717
+Item 10 Freq = 193297 Est. Freq = 193162
+Item 11 Freq = 113381 Est. Freq = 113287
+Item 12 Freq = 72084 Est. Freq = 72238
+Item 13 Freq = 50155 Est. Freq = 49832
+Item 14 Freq = 36436 Est. Freq = 36405
+Item 15 Freq = 27254 Est. Freq = 27157
+Item 16 Freq = 21302 Est. Freq = 21402
+Avg err for top 10 = 0.001995967312891838
+F2 0.435617653355228 F2 Estimate 0.43557204892722107

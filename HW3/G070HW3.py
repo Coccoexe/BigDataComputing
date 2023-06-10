@@ -9,38 +9,8 @@ from collections import defaultdict
 
 global timer, streamLength # global list to store the running time of each function
 timer = []                 # initialize the list
-streamLength = [0]         # Stream length (an array to be passed by reference)
-THRESHOLD = 10000000
-
-
-
-def stopwatch(func):
-    """ Decorator function to measure the running time of a function. Appends the running time to the global list 'timer'.
-    
-    Args:
-        func (function): Function to be measured
-    
-    Returns:
-        function: Decorated function
-
-    Usage:
-        >>> @stopwatch
-        >>> def foo():
-        >>>     pass
-
-        >>> foo()
-        >>> print(round(statistics.mean(timer) * 1000), " ms")
-        451 ms
-    """
-
-    def wrapper(*args, **kwargs):
-        start = time.time()
-        result = func(*args, **kwargs)
-        end = time.time()
-        timer.append(end - start)
-        return result
-    return wrapper
-
+streamLength = [0]         # stream length (an array to be passed by reference)
+THRESHOLD = 10000000       # threshold for the stream length
 
 def process_batch(batch, args, stopping_condition):
     """ Process a batch of data. If the stream length is greater than the threshold, set the stopping condition to True.
@@ -68,11 +38,11 @@ def process_batch(batch, args, stopping_condition):
     batch = batch.map(lambda x: (int(x), 1) if int(x) >= args.left and int(x) <= args.right else None) \
             .filter(lambda x: x is not None) \
             .reduceByKey(lambda a, b: a + b) \
-            .collect()
+            .collect()                                                                # batch = [(element, n), ...]
     for element, n in batch:
-        frequencyMap[element] += n                                                         # true frequency
-        for j in range(args.D):                                                            # for 1 <= j <= args.D           
-            countSketch[j][hash_functions[j](element)] += g_functions(element,j) * n        # update count sketch
+        frequencyMap[element] += n                                                    # true frequency
+        for j in range(args.D):       
+            countSketch[j][hash_functions[j](element)] += g_functions(element, j) * n # count sketch
 
 def main():
     # argparse
@@ -110,32 +80,21 @@ def main():
     frequencyMap = defaultdict(int)
     countSketch = [[0 for _ in range(args.W)] for _ in range(args.D)]
     hash_functions = [lambda u: ((a[i] * u + b[i]) % p) % args.W for i in range(args.D)]
+    g_functions = lambda u, j: ((2 * (hash_functions[j](u) % 2) - 1) * (2 * (u % 2) - 1))
+    
+    # considered g_functions
+    #g_functions = lambda u, j: 2 * ((u % (j + hash_functions[j](u) + 1)) % 2) - 1
+    #g_functions = lambda u, j: 2 * ((u + hash_functions[j](u)) % 2) - 1
 
-    # hash e elemento
-    g_functions = lambda u, j: ((2 * (hash_functions[j](u) % 2) - 1) * (2 * (u % 2) - 1))# * (2 * (j % 2) - 1) * (2 * (a[j]*b[j]%2) - 1))
-    
-    # hash, elemento e riga
-    #g_functions = lambda u, j: (2 * ((hash_functions[j](u) + u + j)%2) - 1)
-    
-    # numero random per ogni elemento per ogni colonna (ideale ma troppa memoria)
-    #g_ = [ [2*random.randint(0,1)-1  for j in range(args.W)] for i in range(args.right - args.left + 1)]
+    # random element for each row and column (ideal, but high memory usage)
+    #g_ = [[2 * random.randint(0, 1) - 1 for _ in range(args.W)] for _ in range(args.right - args.left + 1)]
     #g_functions = lambda u, j: g_[u - args.left][hash_functions[j](u)]
-    
-    # hash, elemento e somma delle cifre
-    #g_functions = lambda u, j: ((hash_functions[j](u) + u + sum(int(i) for i in str(u))) % 2 * 2 - 1)
 
     # process batch
     stream.foreachRDD(lambda batch: process_batch(batch, args, stopping_condition))
-    
-    # info
-    #print("Starting streaming engine")
     ssc.start()
-    #print("Waiting for shutdown condition")
     stopping_condition.wait()
-    #print("Stopping the streaming engine")
     ssc.stop(False, True)
-    #print("Streaming engine stopped")
-    #print("END OF STREAMING\n")
 
     # true statistics
     f = frequencyMap                                             # true frequency
@@ -145,15 +104,6 @@ def main():
     # approximate statistics
     f_approx = {element: statistics.median([countSketch[j][hash_functions[j](element)] * g_functions(element, j) for j in range(args.D)]) for element in f} # approximate frequency                                  
     f2_approx = statistics.median([sum([countSketch[j][k] ** 2 for k in range(args.W)]) for j in range(args.D)]) / interval ** 2 # approximate second moment
-    
-    #f_approx = defaultdict(int)
-    #for element in f:
-    #    temp = []
-    #    for j in range(args.D):
-    #        #temp.append(countSketch[j][hash_functions[j](element)] * g_functions[j])
-    #        temp.append(countSketch[j][hash_functions[j](element)] * g_functions(element,j))
-    #    f_approx[element] = statistics.median(temp)
-    #f2_approx = [sum([countSketch[j][k] ** 2 for k in range(args.W)]) / interval ** 2 for j in range(args.D)]
 
     # average relative error
     k_freq = defaultdict(int, sorted(f.items(), key = lambda x: x[1], reverse = True)[:args.K])
@@ -164,7 +114,7 @@ def main():
 
     # print
     print(f"D = {args.D} W = {args.W} [left,right] = [{args.left},{args.right}] K = {args.K} Port = {args.portExp}")
-    print("Total number of items =", streamLength[0])
+    print(f"Total number of items = {streamLength[0]}")
     print(f"Total number of items in = [{args.left},{args.right}] = {interval}")
     print(f"Number of distinct elements in [{args.left},{args.right}] = {len(f)}")
     if args.K <= 20:
