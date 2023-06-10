@@ -1,0 +1,7 @@
+Receiving data from port = 8888
+D = 9 W = 100 [left,right] = [1,10000] K = 100 Port = 8888
+Total number of items = 10327708
+Total number of items in = [1,10000] = 8541287
+Number of distinct elements in [1,10000] = 10000
+Avg err for top 100 = 16.167093335540926
+F2 0.5020295300616772 F2 Estimate 0.5020201067061143
