@@ -71,9 +71,8 @@ def process_batch(batch, args, stopping_condition):
             .collect()
     for element, n in batch:
         frequencyMap[element] += n                                                         # true frequency
-        for j in range(args.D):                                                            # for 1 <= j <= args.D
-            #countSketch[j][hash_functions[j](element)] += g_functions[j] * n               # update count sketch
-            countSketch[j][hash_functions[j](element)] += g_functions(element,j) * n 
+        for j in range(args.D):                                                            # for 1 <= j <= args.D           
+            countSketch[j][hash_functions[j](element)] += g_functions(element,j) * n        # update count sketch
 
 def main():
     # argparse
@@ -111,7 +110,19 @@ def main():
     frequencyMap = defaultdict(int)
     countSketch = [[0 for _ in range(args.W)] for _ in range(args.D)]
     hash_functions = [lambda u: ((a[i] * u + b[i]) % p) % args.W for i in range(args.D)]
-    g_functions = lambda u, j: ((2 * (hash_functions[j](u) % 2) - 1) * (2 * (u % 2) - 1))
+
+    # hash e elemento
+    g_functions = lambda u, j: ((2 * (hash_functions[j](u) % 2) - 1) * (2 * (u % 2) - 1))# * (2 * (j % 2) - 1) * (2 * (a[j]*b[j]%2) - 1))
+    
+    # hash, elemento e riga
+    #g_functions = lambda u, j: (2 * ((hash_functions[j](u) + u + j)%2) - 1)
+    
+    # numero random per ogni elemento per ogni colonna (ideale ma troppa memoria)
+    #g_ = [ [2*random.randint(0,1)-1  for j in range(args.W)] for i in range(args.right - args.left + 1)]
+    #g_functions = lambda u, j: g_[u - args.left][hash_functions[j](u)]
+    
+    # hash, elemento e somma delle cifre
+    #g_functions = lambda u, j: ((hash_functions[j](u) + u + sum(int(i) for i in str(u))) % 2 * 2 - 1)
 
     # process batch
     stream.foreachRDD(lambda batch: process_batch(batch, args, stopping_condition))
@@ -132,9 +143,9 @@ def main():
     f2 = sum([f[element] ** 2 for element in f]) / interval ** 2 # true second moment
 
     # approximate statistics
-    f_approx = {element: statistics.median([countSketch[j][hash_functions[j](element)] * g_functions(element, j) for j in range(args.D)]) for element in f} # approximate frequency
-    f2_approx = [sum([countSketch[j][k] ** 2 for k in range(args.W)]) / interval ** 2 for j in range(args.D)]                                               # approximate second moment
-
+    f_approx = {element: statistics.median([countSketch[j][hash_functions[j](element)] * g_functions(element, j) for j in range(args.D)]) for element in f} # approximate frequency                                  
+    f2_approx = statistics.median([sum([countSketch[j][k] ** 2 for k in range(args.W)]) for j in range(args.D)]) / interval ** 2 # approximate second moment
+    
     #f_approx = defaultdict(int)
     #for element in f:
     #    temp = []
@@ -148,21 +159,19 @@ def main():
     k_freq = defaultdict(int, sorted(f.items(), key = lambda x: x[1], reverse = True)[:args.K])
     err = defaultdict(int)
     for element in k_freq:
-        print(element, f[element], f_approx[element])
         err[element] = abs(f[element] - f_approx[element]) / f[element]
     err = sum(err.values()) / len(err)
 
-    print(k_freq)
-
     # print
-    print("Interval size =", interval)
-    print("Number of distinct elements =", len(f))
-    print("Average relative error =", err)
+    print(f"D = {args.D} W = {args.W} [left,right] = [{args.left},{args.right}] K = {args.K} Port = {args.portExp}")
+    print("Total number of items =", streamLength[0])
+    print(f"Total number of items in = [{args.left},{args.right}] = {interval}")
+    print(f"Number of distinct elements in [{args.left},{args.right}] = {len(f)}")
     if args.K <= 20:
-        f_top = sorted(f.values(), reverse = True)[:args.K]
-        f_approx_top = sorted(f_approx, reverse = True)[:args.K]
-        print("True frequencies of top-K items =", f_top)
-        print("Estimated frequencies of top-K items =", f_approx_top)
+        for element in k_freq:
+            print(f"Item {element} Freq = {f[element]} Est. Freq = {f_approx[element]}")
+    print(f"Avg err for top {args.K} = {err}")
+    print(f"F2 {f2} F2 Estimate {f2_approx}")
 
 if __name__ == "__main__":
     main()
