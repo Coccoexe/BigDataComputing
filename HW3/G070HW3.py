@@ -39,6 +39,12 @@ def process_batch(batch, args, stopping_condition):
             .filter(lambda x: x is not None) \
             .reduceByKey(lambda a, b: a + b) \
             .collect()                                                                # batch = [(element, n), ...]
+    
+    #batch = batch.filter(lambda x: int(x) >= args.left and int(x) <= args.right) \
+    #        .map(lambda x: (int(x), 1)) \
+    #        .reduceByKey(lambda a, b: a + b) \
+    #        .collect()                                                                # batch = [(element, n), ...]
+
     for element, n in batch:
         frequencyMap[element] += n                                                    # true frequency
         for j in range(args.D):       
@@ -79,12 +85,14 @@ def main():
     global g_functions                                    # g functions
     frequencyMap = defaultdict(int)
     countSketch = [[0 for _ in range(args.W)] for _ in range(args.D)]
-    hash_functions = [lambda u: ((a[i] * u + b[i]) % p) % args.W for i in range(args.D)]
+    hash_functions= [lambda u, a = a[i], b = b[i] : ((a * u + b) % p) % args.W for i in range(args.D)]
     g_functions = lambda u, j: ((2 * (hash_functions[j](u) % 2) - 1) * (2 * (u % 2) - 1))
+
     
     # considered g_functions
     #g_functions = lambda u, j: 2 * ((u % (j + hash_functions[j](u) + 1)) % 2) - 1
     #g_functions = lambda u, j: 2 * ((u + hash_functions[j](u)) % 2) - 1
+
 
     # random element for each row and column (ideal, but high memory usage)
     #g_ = [[2 * random.randint(0, 1) - 1 for _ in range(args.W)] for _ in range(args.right - args.left + 1)]
@@ -102,7 +110,15 @@ def main():
     f2 = sum([f[element] ** 2 for element in f]) / interval ** 2 # true second moment
 
     # approximate statistics
-    f_approx = {element: statistics.median([countSketch[j][hash_functions[j](element)] * g_functions(element, j) for j in range(args.D)]) for element in f} # approximate frequency                                  
+    #f_approx = {element: statistics.median([countSketch[j][hash_functions[j](element)] * g_functions(element, j) for j in range(args.D)]) for element in f} # approximate frequency 
+
+    f_approx = defaultdict(int)
+    for element in f:
+        temp = []
+        for j in range(args.D):
+            temp.append(countSketch[j][hash_functions[j](element)] * g_functions(element, j))
+        f_approx[element] = statistics.median(temp)
+
     f2_approx = statistics.median([sum([countSketch[j][k] ** 2 for k in range(args.W)]) for j in range(args.D)]) / interval ** 2 # approximate second moment
 
     # average relative error
