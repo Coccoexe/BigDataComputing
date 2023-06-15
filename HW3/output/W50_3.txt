@@ -1,7 +1,7 @@
 Receiving data from port = 8888
 D = 9 W = 50 [left,right] = [1,10000] K = 30 Port = 8888
-Total number of items = 11426011
-Total number of items in = [1,10000] = 8121106
+Total number of items = 10463900
+Total number of items in = [1,10000] = 8178095
 Number of distinct elements in [1,10000] = 10000
-Avg err for top 30 = 0.28249480724476245
-F2 0.39581425470283743 F2 Estimate 0.39571786271214465
+Avg err for top 30 = 0.04325416831361705
+F2 0.3501712081164455 F2 Estimate 0.3500560334102642

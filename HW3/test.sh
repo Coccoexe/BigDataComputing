@@ -1,9 +1,9 @@
 #!/bin/bash
 
-python3 G070HW3.py 9 30 1 15000 10 8888 > ./output/15k.txt
-python3 G070HW3.py 9 30 1 10000 10 8888 > ./output/10k.txt
-python3 G070HW3.py 9 30 1 5000 10 8888 > ./output/5k.txt
-python3 G070HW3.py 9 30 1 1000 10 8888 > ./output/1k.txt
+#python3 G070HW3.py 9 30 1 15000 10 8888 > ./output/15k.txt
+#python3 G070HW3.py 9 30 1 10000 10 8888 > ./output/10k.txt
+#python3 G070HW3.py 9 30 1 5000 10 8888 > ./output/5k.txt
+#python3 G070HW3.py 9 30 1 1000 10 8888 > ./output/1k.txt
 
 python3 G070HW3.py 9 100 1 10000 30 8888 > ./output/W100_1.txt
 python3 G070HW3.py 9 100 1 10000 30 8888 > ./output/W100_2.txt
